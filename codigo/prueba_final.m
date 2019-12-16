@@ -15,7 +15,7 @@ figure,imshow(L)
 size(M)
 rangoM=rank(M)
 rangoL=rank(L)
-ceros=S==0;
-E_0=sum(ceros(:))
+not_ceros=S~=0;
+E_0=sum(not_ceros(:))
 time
 numIter
