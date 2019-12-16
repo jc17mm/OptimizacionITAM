@@ -1,0 +1,89 @@
+function [L, S, numIter] = pgrpca_2(M)
+
+% Parametros
+% M - m x n imagen en matriz
+%
+% Parametros intrinsecos del algoritmo
+% tol - tolerancia para parar el algoritmo
+% maxIter - numero maximo de iteraciones
+% mu - parametro de relajacion
+%lambda - peso
+%
+% Salida:
+% [L, S] - estimadores de la matriz de rango bajo y de la parte 
+% del error, respectivamente
+% numIter - numero de iteraciones necesarias para que el metodo convergiera
+%
+%
+% Referencias
+% [1] "Robust Principal Component Analysis: Exact Recovery of Corrupted 
+% Low-Rank Matrices via Convex Optimization", J. Wright et al., preprint 2009.
+%
+% [2] "Robust Principal Component Analysis", Maximilian Balandat, Walid
+% Krichene, Chi Pang Lam, Ka Kit Lam, pp. 54-58, 2012.
+%
+% [3] "An Accelerated Proximal Gradient Algorithm for Nuclear Norm Regularized Least Squares problems", K.-C. Toh and S. Yun, preprint 2009.
+%
+% Copyright: Perception and Decision Laboratory
+%			University of Illinois, Urbana-Champaign
+
+%% Inicializacion de variables
+maxIter = 1000 ;
+[m,n] = size(M) ;
+tol = 10^(-7);
+lambda = m^(-0.5); % lambda recomendada en [1]
+
+t1 = 1;
+t0 = 1;
+
+L0 = zeros(m,n) ; S0 = zeros(m,n) ; % X^{k-1} = (A^{k-1},E^{k-1})
+L1 = zeros(m,n) ; S1 = zeros(m,n) ; % X^{k} = (A^{k},E^{k})
+
+mu_0 = norm(M); 
+mu_k = 0.99*mu_0 ; % recomendación obtenida en [1]
+mu_bar = 1e-9 * mu_0 ; % recomendación obtenida en [1]
+
+converge = 0 ;
+numIter = 0 ;
+
+%% Inicio del algoritmo
+
+while ~converge
+    Y_K_L = L1 + ((t0 - 1)/t1)*(L1-L0);    
+    Y_k_S = S1 + ((t0 - 1)/t1)*(S1-S0) ;
+    
+    
+    G_k_L = Y_K_L - (1/2)*(Y_K_L + Y_k_S - M) ;
+    [U,S,V] = svd(G_k_L,'econ') ;
+    diagS = diag(S) ;
+    L_next = U * diag(pos(diagS-mu_k/2)) * V'; 
+    
+    G_k_S = Y_k_S - (1/2)*(Y_K_L + Y_k_S - M) ;
+    S_next = sign(G_k_S).* pos( abs(G_k_S) - lambda*mu_k/2 ); % Paso thresholding "soft" obtenido en [1]
+        
+    t1_next = 0.5*(1+sqrt(1+4*t1^2));
+    
+    L_salida = Y_K_L-L_next + S_next - Y_k_S;
+    S_salida = Y_k_S-S_next + L_next - Y_K_L;
+    
+    criterio_salida = norm([L_salida,S_salida],'fro')/(2*max(1,norm([L_next,S_next],'fro'))); % recomendacion obtenida en [1]
+    
+    % Evaluacion para convergencia del metodo
+    if criterio_salida <= tol || numIter >= maxIter
+        converge = 1 ;
+    end
+    
+    % Actualizacion de variables
+    mu_k = max(0.9*mu_k,mu_bar);
+    t0 = t1;
+    t1 = t1_next;
+    L0 = L1 ; S0 = S1 ;
+    L1 = L_next ; S1 = S_next ;
+    
+    numIter = numIter + 1 ;
+end
+
+L = L1 ;
+S = S1 ;
+
+end
